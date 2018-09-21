@@ -45,6 +45,7 @@ namespace LinqToExcel
         /// Default is false
         /// </summary>
         public bool UsePersistentConnection { get; set; }
+        public bool UseRowSelect { get; set; }
 
         public ExcelQueryFactory()
           : this(null, null) { }
@@ -208,6 +209,7 @@ namespace LinqToExcel
                 ColumnMappings = _columnMappings,
                 Transformations = _transformations,
                 UsePersistentConnection = UsePersistentConnection,
+                UseRowSelect = UseRowSelect,
                 TrimSpaces = TrimSpaces,
                 ReadOnly = ReadOnly
             };

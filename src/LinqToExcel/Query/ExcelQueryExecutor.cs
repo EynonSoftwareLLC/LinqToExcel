@@ -111,6 +111,29 @@ namespace LinqToExcel.Query
             return returnResults;
         }
 
+        public string[] GetRow(string worksheet, int rowNumber, int cols)
+        {
+            var row = rowNumber.ToString();
+            var endCol = GetExcelColumnName(cols);
+            var sql = "SELECT * FROM [" + worksheet + "$A" + row + ":" + endCol + row + "]";
+
+            var objectResults = GetRowResults(sql);
+
+            List<string> results = new List<string>();
+            if (objectResults.Count() > 0)
+            {
+                var r = (LinqToExcel.Row)objectResults.First();
+                foreach (var resultOperator in r)
+                {
+                    if (resultOperator.GetType() == typeof(System.DBNull)) results.Add("");
+                    results.Add(resultOperator.ToString());
+                }
+            }
+
+            return results.ToArray();
+            
+        }
+
         protected Func<object, T> GetSelectProjector<T>(object firstResult, QueryModel queryModel)
         {
             Func<object, T> projector = (result) => result.Cast<T>();
@@ -222,6 +245,51 @@ namespace LinqToExcel.Query
         }
 
         /// <summary>
+        /// Executes the sql query and returns the data results
+        /// </summary>
+        /// <typeparam name="T">Data type in the main from clause (queryModel.MainFromClause.ItemType)</typeparam>
+        protected IEnumerable<object> GetRowResults(string sql)
+        {
+            IEnumerable<object> results;
+            OleDbDataReader data = null;
+
+            var conn = ExcelUtilities.GetConnection(_args);
+            var command = conn.CreateCommand();
+            try
+            {
+                if (conn.State == ConnectionState.Closed)
+                    conn.Open();
+
+                command.CommandText = sql.ToString();
+                try { data = command.ExecuteReader(); }
+                catch (OleDbException e)
+                {
+                    if (e.Message.Contains(_args.WorksheetName))
+                        throw new DataException(
+                            string.Format("'{0}' is not a valid worksheet name in file {3}. Valid worksheet names are: '{1}'. Error received: {2}",
+                                          _args.WorksheetName, string.Join("', '", ExcelUtilities.GetWorksheetNames(_args.FileName).ToArray()), e.Message, _args.FileName), e);
+                    
+                }
+
+                var columns = ExcelUtilities.GetColumnNames(data);
+                LogColumnMappingWarnings(columns);
+                results = GetRowResults(data, columns);
+            }
+            finally
+            {
+                command.Dispose();
+
+                if (!_args.UsePersistentConnection)
+                {
+                    conn.Dispose();
+                    _args.PersistentConnection = null;
+                }
+            }
+
+            return results;
+        }
+
+        /// <summary>
         /// Logs a warning for any property to column mappings that do not exist in the excel worksheet
         /// </summary>
         /// <param name="Columns">List of columns in the worksheet</param>
@@ -293,12 +361,19 @@ namespace LinqToExcel.Query
             while (data.Read())
             {
                 currentRowNumber++;
+                string[] row = null;
+                if (_args.UseRowSelect)
+                {
+                    row = GetRow(_args.WorksheetName, currentRowNumber, data.FieldCount);
+                }
                 IList<Cell> cells = new List<Cell>();
                 for (var i = 0; i < data.FieldCount; i++)
                 {
                     try
                     {
                         var value = data[i];
+                        if (row.Length > i)
+                            value = row[i];
                         value = TrimStringValue(value);
                         cells.Add(new Cell(value));
                     }
@@ -310,6 +385,22 @@ namespace LinqToExcel.Query
                 results.CallMethod("Add", new RowNoHeader(cells));
             }
             return results.AsEnumerable();
+        }
+
+        private string GetExcelColumnName(int columnNumber)
+        {
+            int dividend = columnNumber;
+            string columnName = String.Empty;
+            int modulo;
+
+            while (dividend > 0)
+            {
+                modulo = (dividend - 1) % 26;
+                columnName = Convert.ToChar(65 + modulo).ToString() + columnName;
+                dividend = (int)((dividend - modulo) / 26);
+            }
+
+            return columnName;
         }
 
         private IEnumerable<object> GetTypeResults(IDataReader data, IEnumerable<string> columns, QueryModel queryModel)

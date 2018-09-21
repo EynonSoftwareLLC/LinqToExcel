@@ -22,6 +22,7 @@ namespace LinqToExcel.Query
         internal bool ReadOnly { get; set; }
         internal bool UsePersistentConnection { get; set; }
 		internal OleDbConnection PersistentConnection { get; set; }
+        internal bool UseRowSelect { get; set; }
         internal TrimSpacesType TrimSpaces { get; set; }
 
         internal ExcelQueryArgs()
@@ -35,6 +36,7 @@ namespace LinqToExcel.Query
             Transformations = args.Transformations ?? new Dictionary<string, Func<string, object>>();
             StrictMapping = args.StrictMapping ?? StrictMappingType.None;
             UsePersistentConnection = args.UsePersistentConnection;
+            UseRowSelect = args.UseRowSelect;
             TrimSpaces = args.TrimSpaces;
             ReadOnly = args.ReadOnly;
         }
